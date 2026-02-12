@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/binary"
 	"slices"
 	"time"
 
@@ -20,9 +21,40 @@ type ViewService struct {
 	srv *Server
 }
 
+// All of these changes are to implement a continuation point
+// this is needed if clients have a limited max chunk count per mesasge
+// UaExpert _does_ have a limited max chunk count and requires this to work
+
+// encodeContinuationPoint creates a stateless continuation point.
+// Format: [Offset 4][MaxRefs 4][BrowseDescription...]
+func (s *ViewService) encodeContinuationPoint(bd *ua.BrowseDescription, offset, maxRefs uint32) ([]byte, error) {
+	bdBytes, err := ua.Encode(bd)
+	if err != nil {
+		return nil, err
+	}
+	cp := make([]byte, 8+len(bdBytes))
+	binary.LittleEndian.PutUint32(cp[0:4], offset)
+	binary.LittleEndian.PutUint32(cp[4:8], maxRefs)
+	copy(cp[8:], bdBytes)
+	return cp, nil
+}
+
+// decodeContinuationPoint decodes a stateless continuation point.
+func (s *ViewService) decodeContinuationPoint(cp []byte) (bd *ua.BrowseDescription, offset, maxRefs uint32, err error) {
+	if len(cp) < 8 {
+		return nil, 0, 0, ua.StatusBadContinuationPointInvalid
+	}
+	offset = binary.LittleEndian.Uint32(cp[0:4])
+	maxRefs = binary.LittleEndian.Uint32(cp[4:8])
+	bd = new(ua.BrowseDescription)
+	if _, err := ua.Decode(cp[8:], bd); err != nil {
+		return nil, 0, 0, ua.StatusBadContinuationPointInvalid
+	}
+	return bd, offset, maxRefs, nil
+}
+
 // https://reference.opcfoundation.org/Core/Part4/v105/docs/5.8.2
 func (s *ViewService) Browse(sc *uasc.SecureChannel, r ua.Request, reqID uint32) (ua.Response, error) {
-
 	req, err := safeReq[*ua.BrowseRequest](r)
 	if err != nil {
 		return nil, err
@@ -30,6 +62,8 @@ func (s *ViewService) Browse(sc *uasc.SecureChannel, r ua.Request, reqID uint32)
 	if s.srv.cfg.logger != nil {
 		s.srv.cfg.logger.Debug("=== Browse incoming")
 	}
+
+	maxRefs := req.RequestedMaxReferencesPerNode
 
 	resp := &ua.BrowseResponse{
 		ResponseHeader: &ua.ResponseHeader{
@@ -40,13 +74,11 @@ func (s *ViewService) Browse(sc *uasc.SecureChannel, r ua.Request, reqID uint32)
 			StringTable:        []string{},
 			AdditionalHeader:   ua.NewExtensionObject(nil),
 		},
-		Results: make([]*ua.BrowseResult, len(req.NodesToBrowse)),
-
-		DiagnosticInfos: []*ua.DiagnosticInfo{{}},
+		Results:         make([]*ua.BrowseResult, len(req.NodesToBrowse)),
+		DiagnosticInfos: []*ua.DiagnosticInfo{},
 	}
 
-	for i := range req.NodesToBrowse {
-		br := req.NodesToBrowse[i]
+	for i, br := range req.NodesToBrowse {
 		if s.srv.cfg.logger != nil {
 			s.srv.cfg.logger.Debug("    Browse of %s", br.NodeID.String())
 		}
@@ -55,11 +87,24 @@ func (s *ViewService) Browse(sc *uasc.SecureChannel, r ua.Request, reqID uint32)
 			resp.Results[i] = &ua.BrowseResult{StatusCode: ua.StatusBad}
 			continue
 		}
-		resp.Results[i] = ns.Browse(br)
+
+		result := ns.Browse(br)
+
+		// Apply maxReferencesToReturn limit if specified
+		if maxRefs > 0 && uint32(len(result.References)) > maxRefs {
+			cp, err := s.encodeContinuationPoint(br, maxRefs, maxRefs)
+			if err != nil {
+				resp.Results[i] = &ua.BrowseResult{StatusCode: ua.StatusBad}
+				continue
+			}
+			result.References = result.References[:maxRefs]
+			result.ContinuationPoint = cp
+		}
+
+		resp.Results[i] = result
 	}
 
 	return resp, nil
-
 }
 
 func suitableRef(srv *Server, desc *ua.BrowseDescription, ref *ua.ReferenceDescription) bool {
@@ -146,7 +191,69 @@ func (s *ViewService) BrowseNext(sc *uasc.SecureChannel, r ua.Request, reqID uin
 	if err != nil {
 		return nil, err
 	}
-	return serviceUnsupported(req.RequestHeader), nil
+
+	resp := &ua.BrowseNextResponse{
+		ResponseHeader: &ua.ResponseHeader{
+			Timestamp:          time.Now(),
+			RequestHandle:      req.RequestHeader.RequestHandle,
+			ServiceResult:      ua.StatusOK,
+			ServiceDiagnostics: &ua.DiagnosticInfo{},
+			StringTable:        []string{},
+			AdditionalHeader:   ua.NewExtensionObject(nil),
+		},
+		Results:         make([]*ua.BrowseResult, len(req.ContinuationPoints)),
+		DiagnosticInfos: []*ua.DiagnosticInfo{},
+	}
+
+	for i, cpBytes := range req.ContinuationPoints {
+		if req.ReleaseContinuationPoints {
+			// Stateless - nothing to release, just acknowledge
+			resp.Results[i] = &ua.BrowseResult{StatusCode: ua.StatusOK}
+			continue
+		}
+
+		bd, offset, maxRefs, err := s.decodeContinuationPoint(cpBytes)
+		if err != nil {
+			resp.Results[i] = &ua.BrowseResult{StatusCode: ua.StatusBadContinuationPointInvalid}
+			continue
+		}
+
+		ns, err := s.srv.Namespace(int(bd.NodeID.Namespace()))
+		if err != nil {
+			resp.Results[i] = &ua.BrowseResult{StatusCode: ua.StatusBad}
+			continue
+		}
+
+		// Re-browse and skip to offset
+		result := ns.Browse(bd)
+		if uint32(len(result.References)) <= offset {
+			// No more results
+			resp.Results[i] = &ua.BrowseResult{StatusCode: ua.StatusOK}
+			continue
+		}
+
+		remaining := result.References[offset:]
+
+		if uint32(len(remaining)) > maxRefs {
+			cp, err := s.encodeContinuationPoint(bd, offset+maxRefs, maxRefs)
+			if err != nil {
+				resp.Results[i] = &ua.BrowseResult{StatusCode: ua.StatusBad}
+				continue
+			}
+			resp.Results[i] = &ua.BrowseResult{
+				StatusCode:        ua.StatusOK,
+				ContinuationPoint: cp,
+				References:        remaining[:maxRefs],
+			}
+		} else {
+			resp.Results[i] = &ua.BrowseResult{
+				StatusCode: ua.StatusOK,
+				References: remaining,
+			}
+		}
+	}
+
+	return resp, nil
 }
 
 // https://reference.opcfoundation.org/Core/Part4/v105/docs/5.8.4

@@ -10,10 +10,13 @@ import (
 	"github.com/gopcua/opcua/uasc"
 )
 
+// these changes were needed to fix the always 0 timeout bug that
+// caused the server to always set the session timeout to 0
+// which caused the client to spam keepalive messages as fast as possible
 const (
-	sessionTimeoutMin     = 100            // 100ms
-	sessionTimeoutMax     = 30 * 60 * 1000 // 30 minutes
-	sessionTimeoutDefault = 60 * 1000      // 60s
+	sessionTimeoutMin     = 100 * time.Millisecond
+	sessionTimeoutMax     = 30 * time.Minute
+	sessionTimeoutDefault = 60 * time.Second
 
 	sessionNonceLength = 32
 )
