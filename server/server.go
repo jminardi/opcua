@@ -165,6 +165,9 @@ func New(opts ...Option) *Server {
 	for _, n := range ServerCapabilitiesNodes(s) {
 		s.namespaces[0].AddNode(n)
 	}
+	for _, n := range StandardTypeNodes() {
+		s.namespaces[0].AddNode(n)
+	}
 
 	return s
 }

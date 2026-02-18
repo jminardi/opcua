@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha1"
 	"crypto/x509"
 	"encoding/binary"
 	"io"
@@ -480,6 +481,14 @@ func (s *SecureChannel) readChunk() (*MessageChunk, error) {
 		if m.SecurityPolicyURI != ua.SecurityPolicyURINone {
 			s.cfg.RemoteCertificate = m.AsymmetricSecurityHeader.SenderCertificate
 			debug.Printf("uasc %d: setting securityPolicy to %s", s.c.ID(), m.SecurityPolicyURI)
+
+			// Compute the SHA-1 thumbprint of the client's certificate.
+			// OPC UA Part 6, Section 6.7.2 requires the ReceiverCertificateThumbprint
+			// in the OPN response to identify which certificate was used to encrypt
+			// the message. Without this, spec-compliant clients reject the response.
+			thumbprint := sha1.Sum(s.cfg.RemoteCertificate)
+			s.cfg.Thumbprint = thumbprint[:]
+			debug.Printf("uasc %d: computed client certificate thumbprint (%d bytes)", s.c.ID(), len(s.cfg.Thumbprint))
 
 			remoteCert, err := x509.ParseCertificate(s.cfg.RemoteCertificate)
 			if err != nil {

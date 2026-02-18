@@ -89,7 +89,7 @@ func NewFolderNode(nodeID *ua.NodeID, name string) *Node {
 			ua.AttributeIDNodeClass:     DataValueFromValue(uint32(ua.NodeClassObject)),
 			ua.AttributeIDBrowseName:    DataValueFromValue(attrs.BrowseName(name)),
 			ua.AttributeIDDisplayName:   DataValueFromValue(attrs.DisplayName(name, name)),
-			ua.AttributeIDDescription:   DataValueFromValue(uint32(ua.NodeClassObject)),
+			ua.AttributeIDDescription:   DataValueFromValue(attrs.DisplayName(name, name)),
 			ua.AttributeIDEventNotifier: DataValueFromValue(int16(0)),
 		},
 		[]*ua.ReferenceDescription{{
@@ -117,7 +117,7 @@ func NewVariableNode(nodeID *ua.NodeID, name string, value any) *Node {
 				ua.AttributeIDNodeClass:     DataValueFromValue(uint32(ua.NodeClassVariable)),
 				ua.AttributeIDBrowseName:    DataValueFromValue(attrs.BrowseName(name)),
 				ua.AttributeIDDisplayName:   DataValueFromValue(attrs.DisplayName(name, name)),
-				ua.AttributeIDDescription:   DataValueFromValue(uint32(ua.NodeClassVariable)),
+				ua.AttributeIDDescription:   DataValueFromValue(attrs.DisplayName(name, name)),
 				ua.AttributeIDDataType:      DataValueFromValue(typedef),
 				ua.AttributeIDEventNotifier: DataValueFromValue(int16(0)),
 			},
@@ -139,7 +139,7 @@ func NewVariableNode(nodeID *ua.NodeID, name string, value any) *Node {
 			ua.AttributeIDNodeClass:     DataValueFromValue(uint32(ua.NodeClassVariable)),
 			ua.AttributeIDBrowseName:    DataValueFromValue(attrs.BrowseName(name)),
 			ua.AttributeIDDisplayName:   DataValueFromValue(attrs.DisplayName(name, name)),
-			ua.AttributeIDDescription:   DataValueFromValue(uint32(ua.NodeClassVariable)),
+			ua.AttributeIDDescription:   DataValueFromValue(attrs.DisplayName(name, name)),
 			ua.AttributeIDDataType:      DataValueFromValue(typedef),
 			ua.AttributeIDEventNotifier: DataValueFromValue(int16(0)),
 		},
@@ -338,11 +338,10 @@ const (
 )
 
 func (n *Node) AddRef(o *Node, rt RefType, forward bool) {
-	//eoid := ua.NewNumericExpandedNodeID(o.ns.ID(), o.)
 	eoid := ua.NewExpandedNodeID(o.ID(), "", 0)
 
 	ref := ua.ReferenceDescription{
-		ReferenceTypeID: ua.NewNumericNodeID(0, uint32(rt)), //o.refs[0].ReferenceTypeID,
+		ReferenceTypeID: ua.NewNumericNodeID(0, uint32(rt)),
 		IsForward:       forward,
 		NodeID:          eoid,
 		BrowseName:      o.BrowseName(),

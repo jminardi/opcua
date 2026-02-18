@@ -240,3 +240,51 @@ func ServerStatusNodes(s *Server, ServerNode *Node) []*Node {
 
 	return nodes
 }
+
+// StandardTypeNodes returns the standard OPC UA type definition nodes
+// that clients expect to find in namespace 0. Without these, clients
+// like UaExpert report errors when resolving TypeDefinition references.
+func StandardTypeNodes() []*Node {
+	return []*Node{
+		// FolderType (i=61) - type definition for Object nodes organized as folders
+		NewNode(
+			ua.NewNumericNodeID(0, id.FolderType),
+			map[ua.AttributeID]*ua.DataValue{
+				ua.AttributeIDNodeClass:   DataValueFromValue(uint32(ua.NodeClassObjectType)),
+				ua.AttributeIDBrowseName:  DataValueFromValue(attrs.BrowseName("FolderType")),
+				ua.AttributeIDDisplayName: DataValueFromValue(attrs.DisplayName("FolderType", "FolderType")),
+				ua.AttributeIDDescription: DataValueFromValue(attrs.DisplayName("FolderType", "An object used to organize other nodes")),
+			},
+			nil,
+			nil,
+		),
+		// BaseVariableType (i=62) - abstract base type for all variable types
+		NewNode(
+			ua.NewNumericNodeID(0, id.BaseVariableType),
+			map[ua.AttributeID]*ua.DataValue{
+				ua.AttributeIDNodeClass:   DataValueFromValue(uint32(ua.NodeClassVariableType)),
+				ua.AttributeIDBrowseName:  DataValueFromValue(attrs.BrowseName("BaseVariableType")),
+				ua.AttributeIDDisplayName: DataValueFromValue(attrs.DisplayName("BaseVariableType", "BaseVariableType")),
+				ua.AttributeIDDescription: DataValueFromValue(attrs.DisplayName("BaseVariableType", "Abstract base type for all variable types")),
+				ua.AttributeIDValueRank:   DataValueFromValue(int32(-2)), // Any
+				ua.AttributeIDDataType:    DataValueFromValue(ua.NewNumericNodeID(0, id.BaseDataType)),
+			},
+			nil,
+			nil,
+		),
+		// BaseDataVariableType (i=63) - default type definition for data variables
+		NewNode(
+			ua.NewNumericNodeID(0, id.BaseDataVariableType),
+			map[ua.AttributeID]*ua.DataValue{
+				ua.AttributeIDNodeClass:   DataValueFromValue(uint32(ua.NodeClassVariableType)),
+				ua.AttributeIDBrowseName:  DataValueFromValue(attrs.BrowseName("BaseDataVariableType")),
+				ua.AttributeIDDisplayName: DataValueFromValue(attrs.DisplayName("BaseDataVariableType", "BaseDataVariableType")),
+				ua.AttributeIDDescription: DataValueFromValue(attrs.DisplayName("BaseDataVariableType", "Default type for data variables")),
+				ua.AttributeIDValueRank:   DataValueFromValue(int32(-2)), // Any
+				ua.AttributeIDDataType:    DataValueFromValue(ua.NewNumericNodeID(0, id.BaseDataType)),
+			},
+			nil,
+			nil,
+		),
+	}
+}
