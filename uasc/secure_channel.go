@@ -824,6 +824,10 @@ func (s *SecureChannel) handleOpenSecureChannelRequest(reqID uint32, svc ua.Requ
 		return err
 	}
 
+	// without this the instance keeps maxBodySize == 0 and EncodeChunks
+	// falls back to 4096 byte chunks instead of the negotiated buffer size
+	instance.SetMaximumBodySize(int(s.c.SendBufSize()))
+
 	instance.state = channelActive // todo(fs): is this correct?
 	// s.setState(secureChannelOpen)
 
