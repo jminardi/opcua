@@ -267,7 +267,7 @@ func StandardTypeNodes() []*Node {
 				ua.AttributeIDDisplayName: DataValueFromValue(attrs.DisplayName("BaseVariableType", "BaseVariableType")),
 				ua.AttributeIDDescription: DataValueFromValue(attrs.DisplayName("BaseVariableType", "Abstract base type for all variable types")),
 				ua.AttributeIDValueRank:   DataValueFromValue(int32(-2)), // Any
-				ua.AttributeIDDataType:    DataValueFromValue(ua.NewNumericNodeID(0, id.BaseDataType)),
+				ua.AttributeIDDataType:    DataValueFromValue(ua.NewNumericExpandedNodeID(0, id.BaseDataType)),
 			},
 			nil,
 			nil,
@@ -281,7 +281,7 @@ func StandardTypeNodes() []*Node {
 				ua.AttributeIDDisplayName: DataValueFromValue(attrs.DisplayName("BaseDataVariableType", "BaseDataVariableType")),
 				ua.AttributeIDDescription: DataValueFromValue(attrs.DisplayName("BaseDataVariableType", "Default type for data variables")),
 				ua.AttributeIDValueRank:   DataValueFromValue(int32(-2)), // Any
-				ua.AttributeIDDataType:    DataValueFromValue(ua.NewNumericNodeID(0, id.BaseDataType)),
+				ua.AttributeIDDataType:    DataValueFromValue(ua.NewNumericExpandedNodeID(0, id.BaseDataType)),
 			},
 			nil,
 			nil,

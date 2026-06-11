@@ -277,7 +277,14 @@ func (n *Node) DataType() *ua.ExpandedNodeID {
 		}
 		return ua.NewTwoByteExpandedNodeID(0)
 	}
-	return v.Value.Value().(*ua.ExpandedNodeID)
+	switch id := v.Value.Value().(type) {
+	case *ua.ExpandedNodeID:
+		return id
+	case *ua.NodeID:
+		return ua.NewExpandedNodeID(id, "", 0)
+	default:
+		return ua.NewTwoByteExpandedNodeID(0)
+	}
 }
 
 func (n *Node) SetNodeClass(nc ua.NodeClass) {
